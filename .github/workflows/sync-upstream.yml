@@ -1,0 +1,34 @@
+name: 每日同步 Memoh 上游
+
+on:
+  schedule:
+    # 每天北京时间 05:37（UTC 21:37），避开整点。
+    - cron: '37 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-memoh-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == '0ozzzii/Memoh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 合并上游 main，保留本仓库提交
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub 的 Fork 同步接口从父仓库合并；不使用 reset 或 force push。
+          # 有冲突时接口返回失败，由 Actions 保留失败记录。
+          gh api --method POST "repos/$GH_REPO/merge-upstream" \
+            -f branch=main --jq '{message, merge_type, base_branch}'
+          gh api "repos/$GH_REPO/compare/felinics:main...main" \
+            --jq '{status, ahead_by, behind_by, html_url}' >> "$GITHUB_STEP_SUMMARY"
